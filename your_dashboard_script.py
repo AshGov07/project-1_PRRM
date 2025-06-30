@@ -10,6 +10,7 @@ def load_data():
 
 df = load_data()
 
+# Set page configuration
 st.set_page_config(page_title="Herbal Regulatory Compliance", layout="wide")
 st.title("🌿 Herbal Ingredients Regulatory Compliance Dashboard")
 st.markdown("""
@@ -17,78 +18,80 @@ Choose a country to explore banned or restricted herbal ingredients.
 Visualizations show data insights and global presence.
 """)
 
-# Sidebar — voice input
-with st.sidebar:
-    st.markdown("🎙️ **Voice Search for Country**")
-    spoken_country = st.text_input("Detected voice input", "", key="voice_text")
+# --- Voice Input Section ---
+st.sidebar.markdown("🎙️ **Voice Search for Country**")
+spoken_country = st.sidebar.text_input("Detected Voice Input", key="voice_text")
 
-    components.html(
-        """
-        <script>
-        const button = document.createElement("button");
-        button.innerText = "🎙️ Speak";
-        button.style = "font-size:16px;margin-top:10px;";
-        document.body.appendChild(button);
+# Inject browser-based voice capture via Web Speech API
+components.html(
+    """
+    <script>
+    const button = document.createElement("button");
+    button.innerText = "🎙️ Speak";
+    button.style = "font-size: 16px; margin-top: 10px;";
+    document.body.appendChild(button);
 
-        const output = document.createElement("p");
-        output.style = "font-weight:bold;margin-top:8px;";
-        document.body.appendChild(output);
+    const output = document.createElement("p");
+    output.style = "font-weight: bold; margin-top: 8px;";
+    document.body.appendChild(output);
 
-        button.onclick = function() {
-            if (!('webkitSpeechRecognition' in window)) {
-                output.innerText = "Speech recognition not supported.";
-                return;
-            }
+    button.onclick = function() {
+        if (!('webkitSpeechRecognition' in window)) {
+            output.innerText = "❌ Speech recognition not supported in this browser.";
+            return;
+        }
 
-            const recognition = new webkitSpeechRecognition();
-            recognition.lang = "en-US";
-            recognition.continuous = false;
-            recognition.interimResults = false;
+        const recognition = new webkitSpeechRecognition();
+        recognition.lang = "en-US";
+        recognition.continuous = false;
+        recognition.interimResults = false;
 
-            recognition.onstart = () => {
-                output.innerText = "🎧 Listening…";
-            };
-
-            recognition.onerror = (e) => {
-                output.innerText = "❌ Error: " + e.error;
-            };
-
-            recognition.onresult = (event) => {
-                const transcript = event.results[0][0].transcript;
-                output.innerText = "🗣️ You said: " + transcript;
-                const inputBox = window.parent.document.querySelectorAll('input[data-testid="stTextInput"]')[0];
-                const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
-                nativeInputValueSetter.call(inputBox, transcript);
-                inputBox.dispatchEvent(new Event('input', { bubbles: true }));
-            };
-
-            recognition.start();
+        recognition.onstart = () => {
+            output.innerText = "🎧 Listening…";
         };
-        </script>
-        """,
-        height=120
-    )
 
-# Default country selection
+        recognition.onerror = (e) => {
+            output.innerText = "❌ Error: " + e.error;
+        };
+
+        recognition.onresult = (event) => {
+            const transcript = event.results[0][0].transcript;
+            output.innerText = "🗣️ You said: " + transcript;
+
+            const inputBox = window.parent.document.querySelectorAll('input[data-testid="stTextInput"]')[0];
+            const nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+            nativeSetter.call(inputBox, transcript);
+            inputBox.dispatchEvent(new Event('input', { bubbles: true }));
+        };
+
+        recognition.start();
+    };
+    </script>
+    """,
+    height=150
+)
+
+# --- Country Selection ---
+# Dropdown is default selection
 selected_country = st.selectbox("🌎 Select a Country", sorted(df['Country'].dropna().unique()))
 
-# Override dropdown if voice input matches
+# If valid voice input exists, override dropdown
 if spoken_country:
     match = df['Country'][df['Country'].str.upper() == spoken_country.strip().upper()]
     if not match.empty:
         selected_country = match.iloc[0]
         st.sidebar.success(f"📍 Voice matched: {selected_country}")
     else:
-        st.sidebar.warning("❌ Couldn’t match voice input to a country.")
+        st.sidebar.warning("❌ Voice input didn’t match any known country.")
 
-# Filter data
+# --- Filter Data ---
 filtered_df = df[df['Country'] == selected_country]
 
 # Data Table
 st.markdown(f"### 📋 Regulatory Data for {selected_country}")
 st.dataframe(filtered_df.reset_index(drop=True), use_container_width=True)
 
-# Charts
+# --- Charts Section ---
 st.markdown("## 📊 Interactive Charts")
 col1, col2 = st.columns(2)
 
@@ -110,7 +113,7 @@ with col2:
                        title=f"🍰 Proportion of Herbal Regulation in {selected_country}")
     st.plotly_chart(pie_chart, use_container_width=True)
 
-# Geo Map (USA & Canada)
+# --- Geo Map ---
 st.markdown("## 🗺️ Geographic View of Herbal Bans")
 map_data = df.copy()
 map_data["lat"] = map_data["Country"].map({"USA": 37.0902, "Canada": 56.1304})
@@ -124,13 +127,13 @@ geo_fig = px.scatter_geo(map_counts,
                          title="🌐 Global Locations of Herbal Regulatory Actions")
 st.plotly_chart(geo_fig, use_container_width=True)
 
-# Citations
+# --- Citations ---
 with st.expander("🔗 View Sources / Citations"):
     for _, row in filtered_df.iterrows():
         if pd.notna(row["Citations"]):
             st.markdown(f"**{row['Ingredient Name']}**: [Link]({row['Citations']})")
 
-# Download
+# --- Download Button ---
 st.download_button(
     label="📥 Download Country Data as CSV",
     data=filtered_df.to_csv(index=False),
