@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-from stt_component import stt  # streamlit-stt component
+import streamlit.components.v1 as components
 
 # Load the dataset
 @st.cache_data
@@ -14,29 +14,72 @@ st.set_page_config(page_title="Herbal Regulatory Compliance", layout="wide")
 st.title("🌿 Herbal Ingredients Regulatory Compliance Dashboard")
 st.markdown("""
 Choose a country to explore banned or restricted herbal ingredients.  
-You can use **voice input** or dropdown to select a country.
+Visualizations show data insights and global presence.
 """)
 
-# Get available countries
-available_countries = sorted(df['Country'].dropna().unique())
+# Sidebar — voice input
+with st.sidebar:
+    st.markdown("🎙️ **Voice Search for Country**")
+    spoken_country = st.text_input("Detected voice input", "", key="voice_text")
 
-# Voice input component
-st.sidebar.markdown("🎙️ **Voice Input**")
-spoken_country = stt(language="en")  # Returns text or None
+    components.html(
+        """
+        <script>
+        const button = document.createElement("button");
+        button.innerText = "🎙️ Speak";
+        button.style = "font-size:16px;margin-top:10px;";
+        document.body.appendChild(button);
 
-# Determine selected_country
-default_country = available_countries[0]
+        const output = document.createElement("p");
+        output.style = "font-weight:bold;margin-top:8px;";
+        document.body.appendChild(output);
+
+        button.onclick = function() {
+            if (!('webkitSpeechRecognition' in window)) {
+                output.innerText = "Speech recognition not supported.";
+                return;
+            }
+
+            const recognition = new webkitSpeechRecognition();
+            recognition.lang = "en-US";
+            recognition.continuous = false;
+            recognition.interimResults = false;
+
+            recognition.onstart = () => {
+                output.innerText = "🎧 Listening…";
+            };
+
+            recognition.onerror = (e) => {
+                output.innerText = "❌ Error: " + e.error;
+            };
+
+            recognition.onresult = (event) => {
+                const transcript = event.results[0][0].transcript;
+                output.innerText = "🗣️ You said: " + transcript;
+                const inputBox = window.parent.document.querySelectorAll('input[data-testid="stTextInput"]')[0];
+                const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
+                nativeInputValueSetter.call(inputBox, transcript);
+                inputBox.dispatchEvent(new Event('input', { bubbles: true }));
+            };
+
+            recognition.start();
+        };
+        </script>
+        """,
+        height=120
+    )
+
+# Default country selection
+selected_country = st.selectbox("🌎 Select a Country", sorted(df['Country'].dropna().unique()))
+
+# Override dropdown if voice input matches
 if spoken_country:
-    formatted = spoken_country.strip().title()
-    if formatted in available_countries:
-        default_country = formatted
-        st.sidebar.success(f"✅ Detected: {formatted}")
+    match = df['Country'][df['Country'].str.upper() == spoken_country.strip().upper()]
+    if not match.empty:
+        selected_country = match.iloc[0]
+        st.sidebar.success(f"📍 Voice matched: {selected_country}")
     else:
-        st.sidebar.warning(f"⚠️ '{spoken_country}' not recognized in dataset.")
-
-# Dropdown selection
-selected_country = st.selectbox("🌎 Select a Country", available_countries,
-                                index=available_countries.index(default_country))
+        st.sidebar.warning("❌ Couldn’t match voice input to a country.")
 
 # Filter data
 filtered_df = df[df['Country'] == selected_country]
@@ -45,7 +88,7 @@ filtered_df = df[df['Country'] == selected_country]
 st.markdown(f"### 📋 Regulatory Data for {selected_country}")
 st.dataframe(filtered_df.reset_index(drop=True), use_container_width=True)
 
-# Charts section
+# Charts
 st.markdown("## 📊 Interactive Charts")
 col1, col2 = st.columns(2)
 
@@ -67,7 +110,7 @@ with col2:
                        title=f"🍰 Proportion of Herbal Regulation in {selected_country}")
     st.plotly_chart(pie_chart, use_container_width=True)
 
-# Geo Map
+# Geo Map (USA & Canada)
 st.markdown("## 🗺️ Geographic View of Herbal Bans")
 map_data = df.copy()
 map_data["lat"] = map_data["Country"].map({"USA": 37.0902, "Canada": 56.1304})
@@ -87,7 +130,7 @@ with st.expander("🔗 View Sources / Citations"):
         if pd.notna(row["Citations"]):
             st.markdown(f"**{row['Ingredient Name']}**: [Link]({row['Citations']})")
 
-# Download button
+# Download
 st.download_button(
     label="📥 Download Country Data as CSV",
     data=filtered_df.to_csv(index=False),
