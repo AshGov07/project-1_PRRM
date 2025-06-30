@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-from stt_component import stt  # Use browser-based speech recognition
+from stt_component import stt  # streamlit-stt component
 
 # Load the dataset
 @st.cache_data
@@ -14,26 +14,29 @@ st.set_page_config(page_title="Herbal Regulatory Compliance", layout="wide")
 st.title("🌿 Herbal Ingredients Regulatory Compliance Dashboard")
 st.markdown("""
 Choose a country to explore banned or restricted herbal ingredients.  
-Visualizations show data insights and global presence.
+You can use **voice input** or dropdown to select a country.
 """)
 
-# Sidebar voice input
-st.sidebar.markdown("🎙️ **Voice Search for Country**")
-voice_input = stt()
-if voice_input:
-    st.sidebar.success(f"✅ Detected Voice Input: {voice_input}")
-
-# Country selection logic
+# Get available countries
 available_countries = sorted(df['Country'].dropna().unique())
-selected_country = st.selectbox("🌎 Select a Country", available_countries)
 
-if voice_input and isinstance(voice_input, str):
-    voice_country = voice_input.title()
-    if voice_country in available_countries:
-        selected_country = voice_country
+# Voice input component
+st.sidebar.markdown("🎙️ **Voice Input**")
+spoken_country = stt(language="en")  # Returns text or None
+
+# Determine selected_country
+default_country = available_countries[0]
+if spoken_country:
+    formatted = spoken_country.strip().title()
+    if formatted in available_countries:
+        default_country = formatted
+        st.sidebar.success(f"✅ Detected: {formatted}")
     else:
-        st.warning(f"⚠️ '{voice_country}' not found in available countries.")
+        st.sidebar.warning(f"⚠️ '{spoken_country}' not recognized in dataset.")
 
+# Dropdown selection
+selected_country = st.selectbox("🌎 Select a Country", available_countries,
+                                index=available_countries.index(default_country))
 
 # Filter data
 filtered_df = df[df['Country'] == selected_country]
