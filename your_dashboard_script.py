@@ -27,12 +27,13 @@ if voice_input:
 available_countries = sorted(df['Country'].dropna().unique())
 selected_country = st.selectbox("🌎 Select a Country", available_countries)
 
-if voice_input:
+if voice_input and isinstance(voice_input, str):
     voice_country = voice_input.title()
     if voice_country in available_countries:
         selected_country = voice_country
     else:
-        st.sidebar.warning(f"⚠️ '{voice_input}' not recognized in data.")
+        st.warning(f"⚠️ '{voice_country}' not found in available countries.")
+
 
 # Filter data
 filtered_df = df[df['Country'] == selected_country]
