@@ -118,6 +118,7 @@ def load_data():
 
 df = load_data()
 
+# Set up Streamlit UI
 st.set_page_config(page_title="Herbal Regulatory Compliance", layout="wide")
 st.title("🌿 Herbal Ingredients Regulatory Compliance Dashboard")
 st.markdown("""
@@ -125,79 +126,74 @@ Choose a country to explore banned or restricted herbal ingredients.
 Visualizations show data insights and global presence.
 """)
 
-# Sidebar with voice input
-st.sidebar.markdown("🎙️ **Voice Search for Country**")
+# Sidebar: Voice input + text box
+with st.sidebar:
+    st.markdown("🎙️ **Voice Search for Country**")
+    spoken_country = st.text_input("Detected voice input", "", key="voice_text")
 
-voice_input = components.html(
-    """
-    <script>
-    const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+    components.html(
+        """
+        <script>
+        const button = document.createElement("button");
+        button.innerText = "🎙️ Speak";
+        button.style = "font-size:16px;margin-top:10px;";
+        document.body.appendChild(button);
 
-    let recognizing = false;
-    let transcript = "";
+        const output = document.createElement("p");
+        output.style = "font-weight:bold;margin-top:8px;";
+        document.body.appendChild(output);
 
-    window.startRecognition = async function() {
-        const output = document.getElementById("output");
-        const button = document.getElementById("start-button");
+        button.onclick = function() {
+            if (!('webkitSpeechRecognition' in window)) {
+                output.innerText = "Speech recognition not supported.";
+                return;
+            }
 
-        if (!('webkitSpeechRecognition' in window)) {
-            output.innerText = "❌ Speech recognition not supported in this browser.";
-            return;
-        }
+            const recognition = new webkitSpeechRecognition();
+            recognition.lang = "en-US";
+            recognition.continuous = false;
+            recognition.interimResults = false;
 
-        const recognition = new webkitSpeechRecognition();
-        recognition.continuous = false;
-        recognition.interimResults = false;
-        recognition.lang = "en-US";
+            recognition.onstart = () => {
+                output.innerText = "🎧 Listening…";
+            };
 
-        recognition.onstart = () => {
-            recognizing = true;
-            output.innerText = "🎧 Listening...";
-            button.disabled = true;
+            recognition.onerror = (e) => {
+                output.innerText = "❌ Error: " + e.error;
+            };
+
+            recognition.onresult = (event) => {
+                const transcript = event.results[0][0].transcript;
+                output.innerText = "🗣️ You said: " + transcript;
+                const inputBox = window.parent.document.querySelectorAll('input[data-testid="stTextInput"]')[0];
+                const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
+                nativeInputValueSetter.call(inputBox, transcript);
+                inputBox.dispatchEvent(new Event('input', { bubbles: true }));
+            };
+
+            recognition.start();
         };
+        </script>
+        """,
+        height=120
+    )
 
-        recognition.onresult = (event) => {
-            transcript = event.results[0][0].transcript;
-            output.innerText = "🗣️ You said: " + transcript;
-            Streamlit.setComponentValue(transcript);
-        };
-
-        recognition.onerror = (event) => {
-            output.innerText = "❌ Error occurred: " + event.error;
-        };
-
-        recognition.onend = () => {
-            recognizing = false;
-            button.disabled = false;
-        };
-
-        recognition.start();
-    };
-    </script>
-
-    <button id="start-button" onclick="startRecognition()">🎙️ Speak</button>
-    <p id="output" style="font-weight: bold;"></p>
-    """,
-    height=150,
-)
-
-# Dropdown selection
+# Dropdown (default selection)
 selected_country = st.selectbox("🌎 Select a Country", sorted(df['Country'].dropna().unique()))
 
-# Use voice input to override dropdown if matched
-if voice_input:
-    voice_text = voice_input.strip().upper()
-    match = df['Country'][df['Country'].str.upper() == voice_text]
+# Override dropdown with voice match
+if spoken_country:
+    match = df['Country'][df['Country'].str.upper() == spoken_country.strip().upper()]
     if not match.empty:
         selected_country = match.iloc[0]
         st.sidebar.success(f"📍 Voice matched: {selected_country}")
     else:
-        st.sidebar.warning("❌ No match for voice input.")
+        st.sidebar.warning("❌ Couldn’t match voice input to a country.")
 
 # Filter data
 filtered_df = df[df['Country'] == selected_country]
 
-# Data Table
+# Display Data
 st.markdown(f"### 📋 Regulatory Data for {selected_country}")
 st.dataframe(filtered_df.reset_index(drop=True), use_container_width=True)
 
@@ -223,7 +219,7 @@ with col2:
                        title=f"🍰 Proportion of Herbal Regulation in {selected_country}")
     st.plotly_chart(pie_chart, use_container_width=True)
 
-# Map
+# Geographic Visualization
 st.markdown("## 🗺️ Geographic View of Herbal Bans")
 map_data = df.copy()
 map_data["lat"] = map_data["Country"].map({"USA": 37.0902, "Canada": 56.1304})
