@@ -1,7 +1,6 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-import speech_recognition as sr
 from io import BytesIO
 
 # Load the dataset
@@ -51,39 +50,66 @@ Choose a country to explore banned or restricted herbal ingredients.
 Visualizations show data insights and global presence.
 """)
 
-# Sidebar voice input
+# Browser-based voice input
+def get_voice_input():
+    """JavaScript code for browser-based speech recognition"""
+    js = """
+    const startRecording = async () => {
+        const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+        recognition.lang = 'en-US';
+        
+        return new Promise((resolve) => {
+            recognition.onresult = (event) => {
+                const transcript = event.results[0][0].transcript;
+                resolve(transcript);
+            };
+            
+            recognition.onerror = (event) => {
+                resolve("error:" + event.error);
+            };
+            
+            recognition.start();
+        });
+    };
+    
+    startRecording().then(transcript => {
+        const rootElement = window.parent.document.querySelector('[data-testid="stAppViewContainer"]');
+        const inputElement = rootElement.querySelector('input[aria-label="🌎 Select a Country"]');
+        
+        if (transcript.startsWith("error:")) {
+            const error = transcript.split(":")[1];
+            streamlitApi.showToast("Voice recognition error: " + error);
+        } else {
+            inputElement.value = transcript;
+            const event = new Event('input', { bubbles: true });
+            inputElement.dispatchEvent(event);
+            streamlitApi.showToast("Voice input: " + transcript);
+        }
+    });
+    """
+    return js
+
+# Voice input button
 st.sidebar.markdown("🎙️ **Voice Search for Country**")
-use_voice = st.sidebar.button("🎙️ Speak")
+if st.sidebar.button("🎙️ Speak"):
+    st.components.v1.html(
+        f"""
+        <script>
+            {get_voice_input()}
+        </script>
+        """,
+        height=0,
+        width=0,
+    )
+    st.toast("Listening... Speak now!", icon="🎙️")
 
 # Default dropdown
 selected_country = st.selectbox("🌎 Select a Country", sorted(df['Country'].dropna().unique()))
 
-# Voice input handling
-if use_voice:
-    recognizer = sr.Recognizer()
-    try:
-        with sr.Microphone() as source:
-            with st.spinner("🎙️ Listening for country name..."):
-                audio = recognizer.listen(source, timeout=5)
-                voice_query = recognizer.recognize_google(audio).strip().upper()
-                country_match = df['Country'][df['Country'].str.upper() == voice_query]
-                if not country_match.empty:
-                    selected_country = country_match.iloc[0]
-                    st.success(f"✅ Detected Country: {selected_country}")
-                else:
-                    st.warning(f"⚠️ '{voice_query}' is not a valid country in the data.")
-    except sr.UnknownValueError:
-        st.error("❌ Couldn't understand the input.")
-    except sr.RequestError as e:
-        st.error(f"❌ Voice recognition error: {e}")
-    except sr.WaitTimeoutError:
-        st.error("⌛ Listening timed out. Try again.")
-    except Exception as e:
-        st.error(f"❌ Error: {e}")
-
 # Filter data
 filtered_df = df[df['Country'] == selected_country]
 
+# Rest of your app remains the same...
 # Data Table
 st.markdown(f"### 📋 Regulatory Data for {selected_country}")
 st.dataframe(filtered_df.reset_index(drop=True), use_container_width=True)
