@@ -1,7 +1,4 @@
 streamlit
 pandas
 plotly
-openai-whisper
-torch
 openpyxl
-numpy
