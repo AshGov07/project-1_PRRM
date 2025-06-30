@@ -1,16 +1,49 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-import streamlit.components.v1 as components
+import speech_recognition as sr
+from io import BytesIO
 
 # Load the dataset
 @st.cache_data
 def load_data():
-    return pd.read_excel("Sample_Banned_Herbal_Ingredients_USA_Canada_.xlsx")
+    data = {
+        'Ingredient Name': ['Acorus calamus', 'Aloe (botanical non-tea)', 'Aristolochic Acid', 
+                           'Belladonna', 'Cannabis', 'Chaparral', 'Comfrey', 'Ephedrine alkaloids',
+                           'Kava', 'Kratom', 'Sassafras', 'Yohimbe'],
+        'Prohibited to Import': ['Contextual', 'IA 99-45', 'Yes', 'Yes', 'Yes', 'Yes', 'Yes', 
+                               'Yes', 'Restricted', 'Yes', 'Yes', 'Restricted'],
+        'Banned': ['Restricted', 'Conditionally', 'Yes', 'Restricted', 'Schedule I', 'Discouraged',
+                  'Yes', 'Yes', 'Warnings', 'Unapproved', 'Yes', 'Discouraged'],
+        'Cannot be Grown': ['No', 'No', 'Discouraged', 'No', 'Yes', 'No', 'No', 'No', 
+                           'No', 'Varies', 'No', 'No'],
+        'Citations': ['https://ods.od.nih.gov/factsheets/List_of_Botanicals/',
+                    'https://www.accessdata.fda.gov/cms_ia/importalert_147.html',
+                    'https://www.fda.gov/food/metals-and-your-food/aristolochic-acid-herbal-products',
+                    'https://www.fda.gov/news-events/press-announcements/fda-asks-homeopathic-manufacturer-withdraw-belladonna-containing-products',
+                    'https://www.dea.gov/drug-information/csa',
+                    'https://www.ncbi.nlm.nih.gov/pmc/articles/PMC5922762/',
+                    'https://ods.od.nih.gov/factsheets/Comfrey-HealthProfessional/',
+                    'https://www.fda.gov/food/dietary-supplements/information-select-dietary-supplement-ingredients-and-other-substances',
+                    'https://www.fda.gov/consumers/consumer-updates/kava-kava-linked-severe-liver-injury',
+                    'https://www.fda.gov/news-events/public-health-focus/fda-and-kratom',
+                    'https://www.fda.gov/food/food-additives-petitions/sassafras',
+                    'https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4118946/'],
+        'Country': ['USA', 'USA', 'USA', 'USA', 'USA', 'USA', 'USA', 'USA', 'USA', 'USA', 'USA', 'USA'],
+        'Case Reports (USA)': ['2011: FDA warnings', '2002: Import alerts', '2001: Kidney failure cases',
+                              '2017: Infant seizures', '2018: CBD warnings', '1992: Liver toxicity',
+                              '2001: Oral ban', '2004: 16,000+ adverse events', '2002: Liver failure',
+                              '2016: Product seizures', '1976: Flavoring ban', '2013: Heart risk warnings'],
+        'Case Reports (Canada)': ['None found', 'None found', '2012: Recalls', '2019: Recalls',
+                                 '2019: THC limits', 'None found', '2006: Topical restrictions',
+                                 '2003: Stroke reports', '2002: Health advisory', '2016: Addiction advisory',
+                                 'None found', '2015: Adulteration recalls']
+    }
+    return pd.DataFrame(data)
 
 df = load_data()
 
-# Set page configuration
+# App configuration
 st.set_page_config(page_title="Herbal Regulatory Compliance", layout="wide")
 st.title("🌿 Herbal Ingredients Regulatory Compliance Dashboard")
 st.markdown("""
@@ -18,80 +51,44 @@ Choose a country to explore banned or restricted herbal ingredients.
 Visualizations show data insights and global presence.
 """)
 
-# --- Voice Input Section ---
+# Sidebar voice input
 st.sidebar.markdown("🎙️ **Voice Search for Country**")
-spoken_country = st.sidebar.text_input("Detected Voice Input", key="voice_text")
+use_voice = st.sidebar.button("🎙️ Speak")
 
-# Inject browser-based voice capture via Web Speech API
-components.html(
-    """
-    <script>
-    const button = document.createElement("button");
-    button.innerText = "🎙️ Speak";
-    button.style = "font-size: 16px; margin-top: 10px;";
-    document.body.appendChild(button);
-
-    const output = document.createElement("p");
-    output.style = "font-weight: bold; margin-top: 8px;";
-    document.body.appendChild(output);
-
-    button.onclick = function() {
-        if (!('webkitSpeechRecognition' in window)) {
-            output.innerText = "❌ Speech recognition not supported in this browser.";
-            return;
-        }
-
-        const recognition = new webkitSpeechRecognition();
-        recognition.lang = "en-US";
-        recognition.continuous = false;
-        recognition.interimResults = false;
-
-        recognition.onstart = () => {
-            output.innerText = "🎧 Listening…";
-        };
-
-        recognition.onerror = (e) => {
-            output.innerText = "❌ Error: " + e.error;
-        };
-
-        recognition.onresult = (event) => {
-            const transcript = event.results[0][0].transcript;
-            output.innerText = "🗣️ You said: " + transcript;
-
-            const inputBox = window.parent.document.querySelectorAll('input[data-testid="stTextInput"]')[0];
-            const nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
-            nativeSetter.call(inputBox, transcript);
-            inputBox.dispatchEvent(new Event('input', { bubbles: true }));
-        };
-
-        recognition.start();
-    };
-    </script>
-    """,
-    height=150
-)
-
-# --- Country Selection ---
-# Dropdown is default selection
+# Default dropdown
 selected_country = st.selectbox("🌎 Select a Country", sorted(df['Country'].dropna().unique()))
 
-# If valid voice input exists, override dropdown
-if spoken_country:
-    match = df['Country'][df['Country'].str.upper() == spoken_country.strip().upper()]
-    if not match.empty:
-        selected_country = match.iloc[0]
-        st.sidebar.success(f"📍 Voice matched: {selected_country}")
-    else:
-        st.sidebar.warning("❌ Voice input didn’t match any known country.")
+# Voice input handling
+if use_voice:
+    recognizer = sr.Recognizer()
+    try:
+        with sr.Microphone() as source:
+            with st.spinner("🎙️ Listening for country name..."):
+                audio = recognizer.listen(source, timeout=5)
+                voice_query = recognizer.recognize_google(audio).strip().upper()
+                country_match = df['Country'][df['Country'].str.upper() == voice_query]
+                if not country_match.empty:
+                    selected_country = country_match.iloc[0]
+                    st.success(f"✅ Detected Country: {selected_country}")
+                else:
+                    st.warning(f"⚠️ '{voice_query}' is not a valid country in the data.")
+    except sr.UnknownValueError:
+        st.error("❌ Couldn't understand the input.")
+    except sr.RequestError as e:
+        st.error(f"❌ Voice recognition error: {e}")
+    except sr.WaitTimeoutError:
+        st.error("⌛ Listening timed out. Try again.")
+    except Exception as e:
+        st.error(f"❌ Error: {e}")
 
-# --- Filter Data ---
+# Filter data
 filtered_df = df[df['Country'] == selected_country]
 
 # Data Table
 st.markdown(f"### 📋 Regulatory Data for {selected_country}")
 st.dataframe(filtered_df.reset_index(drop=True), use_container_width=True)
 
-# --- Charts Section ---
+# Charts section
 st.markdown("## 📊 Interactive Charts")
 col1, col2 = st.columns(2)
 
@@ -113,7 +110,7 @@ with col2:
                        title=f"🍰 Proportion of Herbal Regulation in {selected_country}")
     st.plotly_chart(pie_chart, use_container_width=True)
 
-# --- Geo Map ---
+# Geo Map
 st.markdown("## 🗺️ Geographic View of Herbal Bans")
 map_data = df.copy()
 map_data["lat"] = map_data["Country"].map({"USA": 37.0902, "Canada": 56.1304})
@@ -122,21 +119,23 @@ map_counts = map_data.groupby(["Country", "lat", "lon"]).size().reset_index(name
 
 geo_fig = px.scatter_geo(map_counts,
                          lat="lat", lon="lon",
-                         text="Country", size="Count",
+                         hover_name="Country",
+                         size="Count",
                          projection="natural earth",
                          title="🌐 Global Locations of Herbal Regulatory Actions")
 st.plotly_chart(geo_fig, use_container_width=True)
 
-# --- Citations ---
+# Citations
 with st.expander("🔗 View Sources / Citations"):
     for _, row in filtered_df.iterrows():
         if pd.notna(row["Citations"]):
             st.markdown(f"**{row['Ingredient Name']}**: [Link]({row['Citations']})")
 
-# --- Download Button ---
+# Download button
+csv = filtered_df.to_csv(index=False).encode('utf-8')
 st.download_button(
     label="📥 Download Country Data as CSV",
-    data=filtered_df.to_csv(index=False),
+    data=csv,
     file_name=f"{selected_country}_Herbal_Regulations.csv",
     mime='text/csv'
 )
