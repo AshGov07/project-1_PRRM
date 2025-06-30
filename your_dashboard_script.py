@@ -105,22 +105,16 @@
 
 
 
+
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-from streamlit_webrtc import webrtc_streamer, WebRtcMode, ClientSettings
+from streamlit_webrtc import webrtc_streamer, WebRtcMode
 import whisper
 import av
 import tempfile
 import numpy as np
-
-# Set up Streamlit
-st.set_page_config(page_title="Herbal Regulatory Compliance", layout="wide")
-st.title("🌿 Herbal Ingredients Regulatory Compliance Dashboard")
-st.markdown("""
-Choose a country to explore banned or restricted herbal ingredients.  
-Visualizations show data insights and global presence.
-""")
+import soundfile as sf
 
 # Load dataset
 @st.cache_data
@@ -128,70 +122,70 @@ def load_data():
     return pd.read_excel("Sample_Banned_Herbal_Ingredients_USA_Canada_.xlsx")
 
 df = load_data()
-countries = sorted(df['Country'].dropna().unique())
-selected_country = st.selectbox("🌎 Select a Country", countries)
+st.set_page_config(page_title="Herbal Regulatory Compliance", layout="wide")
+st.title("🌿 Herbal Ingredients Regulatory Compliance Dashboard")
+st.markdown("Choose a country to explore banned or restricted herbal ingredients. Visualizations show data insights and global presence.")
 
-# Load Whisper model (only once)
+# Whisper ASR model
 @st.cache_resource
 def load_model():
     return whisper.load_model("base")
 
 model = load_model()
 
-# Audio handler
+# Audio processing
 class AudioProcessor:
     def __init__(self):
         self.frames = []
 
     def recv(self, frame: av.AudioFrame) -> av.AudioFrame:
-        audio_data = frame.to_ndarray().flatten()
-        self.frames.append(audio_data)
+        audio = frame.to_ndarray().flatten()
+        self.frames.append(audio)
         return frame
 
     def get_transcription(self):
         if not self.frames:
             return None
-        audio = np.concatenate(self.frames).astype(np.float32) / 32768.0  # 16-bit PCM → float32
+        audio_data = np.concatenate(self.frames).astype(np.float32) / 32768.0
         with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmpfile:
-            import soundfile as sf
-            sf.write(tmpfile.name, audio, 16000)
+            sf.write(tmpfile.name, audio_data, 16000)
             result = model.transcribe(tmpfile.name)
             return result["text"]
 
 processor = AudioProcessor()
 
-# Voice UI in sidebar
+# UI: Dropdown and mic input
+countries = sorted(df['Country'].dropna().unique())
+selected_country = st.selectbox("🌎 Select a Country", countries)
+
 with st.sidebar:
     st.markdown("🎙️ **Say the Country Name**")
     ctx = webrtc_streamer(
-        key="voice",
+        key="speech",
         mode=WebRtcMode.SENDONLY,
         in_audio=True,
-        client_settings=ClientSettings(
-            media_stream_constraints={"audio": True, "video": False},
-            rtc_configuration={}
-        ),
         audio_receiver_size=512,
         async_processing=True
     )
 
     if ctx.audio_receiver:
-        st.info("🎧 Listening… Say something like 'USA' or 'Canada'")
+        st.info("🎧 Listening… Speak clearly")
         audio_frames = ctx.audio_receiver.get_frames(timeout=2)
         for frame in audio_frames:
             processor.recv(frame)
+
         if st.button("📝 Transcribe Voice"):
-            transcription = processor.get_transcription()
-            if transcription:
-                st.success(f"🗣️ You said: `{transcription}`")
-                match = df['Country'][df['Country'].str.upper() == transcription.strip().upper()]
+            transcript = processor.get_transcription()
+            if transcript:
+                st.success(f"🗣️ You said: `{transcript}`")
+                match = df['Country'][df['Country'].str.upper() == transcript.strip().upper()]
                 if not match.empty:
                     selected_country = match.iloc[0]
                     st.success(f"📍 Matched Country: {selected_country}")
                 else:
-                    st.warning("❌ Couldn’t match that to a country in the data.")
+                    st.warning("🔍 Couldn’t match that to a country.")
             else:
-                st.error("⚠️ No audio captured.")
+                st.error("❌ No audio was captured.")
 
 # Filter data
 filtered_df = df[df['Country'] == selected_country]
@@ -222,18 +216,20 @@ with col2:
                        title=f"🍰 Proportion of Herbal Regulation in {selected_country}")
     st.plotly_chart(pie_chart, use_container_width=True)
 
-# Geo Map
+# Map
 st.markdown("## 🗺️ Geographic View of Herbal Bans")
 map_data = df.copy()
 map_data["lat"] = map_data["Country"].map({"USA": 37.0902, "Canada": 56.1304})
 map_data["lon"] = map_data["Country"].map({"USA": -95.7129, "Canada": -106.3468})
 map_counts = map_data.groupby(["Country", "lat", "lon"]).size().reset_index(name='Count')
 
-geo_fig = px.scatter_geo(map_counts,
-                         lat="lat", lon="lon",
-                         text="Country", size="Count",
-                         projection="natural earth",
-                         title="🌐 Global Locations of Herbal Regulatory Actions")
+geo_fig = px.scatter_geo(
+    map_counts,
+    lat="lat", lon="lon",
+    text="Country", size="Count",
+    projection="natural earth",
+    title="🌐 Global Locations of Herbal Regulatory Actions"
+)
 st.plotly_chart(geo_fig, use_container_width=True)
 
 # Citations
