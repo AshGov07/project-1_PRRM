@@ -364,21 +364,6 @@ fig_freq = px.bar(ingredient_counts,
                   color='Reported Incidents')
 st.plotly_chart(fig_freq, use_container_width=True)
 
-# =====================
-# REGULATORY INSIGHTS
-# =====================
-st.markdown("### ℹ️ Regulatory Insights")
-if country == "USA":
-    st.markdown("""
-    - FDA Import Alerts target banned ingredients
-    - 2023–24: -33% growth in herbal supplement imports
-    - Recent lawsuits on kratom health risks
-    """)
-elif country == "Australia":
-    st.markdown("""
-    - TGA bans black salve, yohimbe and more
-    - Sharp increase in seizures of unlisted herbal imports
-    """)
 
 st.caption("Sources: FDA, TGA, Clinical case reports, WHO Herbal Regulation Database")
 
