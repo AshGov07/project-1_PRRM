@@ -128,127 +128,276 @@
 
 
 
+# import streamlit as st
+# import pandas as pd
+# import plotly.express as px
+# import re
+
+# # Load data
+# df = pd.read_excel("final_banned_herbal_ingredients_with_case_reports.xlsx")
+
+# # Title and dropdown
+# st.title("🌿 Banned Herbal Ingredients by Country")
+# country = st.selectbox("Select a Country", sorted(df["Country"].unique()))
+
+# # Filtered data
+# filtered_df = df[df["Country"] == country]
+
+# # Country Highlight Section
+# st.markdown(f"### 🌍 {country} - Regulatory Overview")
+
+# # Add country-specific regulatory information
+# if country == "USA":
+#     st.markdown("""
+#     **FDA Regulatory Framework:**
+#     - Herbal products are regulated as dietary supplements under DSHEA 1994
+#     - Manufacturers don't need FDA approval before marketing
+#     - FDA can only act after safety issues emerge
+#     - Required to report serious adverse events
+#     """)
+# elif country == "Australia":
+#     st.markdown("""
+#     **TGA Regulatory Framework:**
+#     - Herbal products regulated as medicines or listed supplements
+#     - Requires pre-market assessment for higher-risk products
+#     - Maintains the Australian Register of Therapeutic Goods (ARTG)
+#     """)
+
+# # Country flag visualization (using emoji as fallback)
+# country_flags = {
+#     "USA": "🇺🇸",
+#     "Australia": "🇦🇺"
+# }
+# st.markdown(f"**Country Flag:** {country_flags.get(country, '')}")
+
+# # Overview
+# st.markdown(f"### Banned/Restricted Herbs in {country}")
+# st.dataframe(filtered_df[["Herbal Ingredient", "Botanical Name", "Status", "Risk"]], 
+#             use_container_width=True)
+
+# # Case reports with enhanced display
+# st.markdown("### 📄 Case Reports & Regulatory Actions")
+# for _, row in filtered_df.iterrows():
+#     with st.expander(f"{row['Herbal Ingredient']} ({row['Botanical Name']})"):
+#         st.write(f"**Status:** {row['Status']} | **Risk:** {row['Risk']}")
+        
+#         # Parse case reports to extract number of incidents
+#         case_text = str(row['Case Reports / Incidents'])
+#         if "+" in case_text or "cases" in case_text.lower():
+#             # Extract numbers from text like "140+ adverse events" or "6+ liver injury cases"
+#             numbers = re.findall(r'\d+', case_text)
+#             # Exclude numbers that are likely years (1900-2100)
+#             numbers = [int(num) for num in numbers if not (1900 <= int(num) <= 2100)]
+#             incident_count = max(numbers) if numbers else 1
+#         else:
+#             incident_count = 1
+            
+#         st.write(f"**Reported Incidents:** {incident_count}")
+#         st.write(f"**Case Details:** {case_text}")
+#         st.markdown(f"[Regulatory Source]({row['Source']})")
+
+# # Enhanced Risk Distribution Chart
+# st.markdown("### 📊 Risk Profile Analysis")
+# risk_df = filtered_df.copy()
+
+# # Extract numerical values from case reports with year exclusion
+# def extract_incidents(text):
+#     text = str(text)
+#     if "+" in text or "cases" in text.lower():
+#         numbers = re.findall(r'\d+', text)
+#         # Exclude numbers that are likely years (1900-2100)
+#         numbers = [int(num) for num in numbers if not (1900 <= int(num) <= 2100)]
+#         return max(numbers) if numbers else 1
+#     return 1
+
+# risk_df['Incident Count'] = risk_df['Case Reports / Incidents'].apply(extract_incidents)
+
+# # Group by risk category and sum incidents
+# risk_analysis = risk_df.groupby('Risk')['Incident Count'].sum().reset_index()
+# risk_analysis.columns = ['Risk Category', 'Total Reported Incidents']
+
+# fig_risk = px.bar(risk_analysis, 
+#                  x='Risk Category', 
+#                  y='Total Reported Incidents',
+#                  color='Risk Category',
+#                  title=f'Total Reported Incidents by Risk Category in {country}',
+#                  labels={'Total Reported Incidents': 'Number of Incidents'})
+# st.plotly_chart(fig_risk, use_container_width=True)
+
+# # Enforcement Frequency Chart (now shows actual incident counts)
+# st.markdown("### 📈 Ingredient Enforcement History")
+# ingredient_counts = risk_df.groupby('Herbal Ingredient')['Incident Count'].sum().reset_index()
+# ingredient_counts.columns = ['Herbal Ingredient', 'Reported Incidents']
+
+# fig_freq = px.bar(ingredient_counts, 
+#                  x='Herbal Ingredient', 
+#                  y='Reported Incidents',
+#                  title=f'Reported Incidents by Ingredient in {country}',
+#                  color='Reported Incidents')
+# st.plotly_chart(fig_freq, use_container_width=True)
+
+# # Additional Regulatory Context
+# st.markdown("### ℹ️ Regulatory Insights")
+# if country == "USA":
+#     st.markdown("""
+#     - The FDA maintains an Import Alert system for problematic herbal ingredients
+#     - From 2023-2024, herbal supplement imports to the US showed a -33% growth rate
+#     - Recent lawsuits target kratom manufacturers for adverse health effects
+#     """)
+# elif country == "Australia":
+#     st.markdown("""
+#     - TGA maintains a Schedule of banned substances in therapeutic goods
+#     - Australia has seen increasing seizures of prohibited herbal products like black salve
+#     """)
+
+# # Data source attribution
+# st.caption("Data sources: FDA Adverse Event Reporting System, TGA regulatory actions, and clinical case reports")
+
+
+
 import streamlit as st
 import pandas as pd
 import plotly.express as px
 import re
+import google.generativeai as genai
 
-# Load data
+# =====================
+# PAGE CONFIGURATION
+# =====================
+st.set_page_config(page_title="Banned Herbal Ingredients", layout="wide")
+
+# =====================
+# GEMINI SETUP
+# =====================
+genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+gemini_model = genai.GenerativeModel("gemini-pro")
+
+# =====================
+# LOAD DATA
+# =====================
 df = pd.read_excel("final_banned_herbal_ingredients_with_case_reports.xlsx")
 
-# Title and dropdown
-st.title("🌿 Banned Herbal Ingredients by Country")
-country = st.selectbox("Select a Country", sorted(df["Country"].unique()))
-
-# Filtered data
+# =====================
+# SIDEBAR: COUNTRY SELECTION
+# =====================
+st.sidebar.title("🌐 Country Filter")
+country = st.sidebar.selectbox("Select a Country", sorted(df["Country"].unique()))
 filtered_df = df[df["Country"] == country]
 
-# Country Highlight Section
-st.markdown(f"### 🌍 {country} - Regulatory Overview")
+# =====================
+# HEADER
+# =====================
+st.title("🌿 Banned Herbal Ingredients Dashboard")
+st.subheader(f"Regulatory Overview: {country}")
 
-# Add country-specific regulatory information
+# Country-specific info
 if country == "USA":
     st.markdown("""
-    **FDA Regulatory Framework:**
-    - Herbal products are regulated as dietary supplements under DSHEA 1994
-    - Manufacturers don't need FDA approval before marketing
-    - FDA can only act after safety issues emerge
-    - Required to report serious adverse events
+    **🇺🇸 FDA Regulatory Framework:**
+    - Herbal products regulated under DSHEA 1994
+    - No FDA pre-approval needed
+    - Must report serious adverse events
     """)
 elif country == "Australia":
     st.markdown("""
-    **TGA Regulatory Framework:**
-    - Herbal products regulated as medicines or listed supplements
-    - Requires pre-market assessment for higher-risk products
-    - Maintains the Australian Register of Therapeutic Goods (ARTG)
+    **🇦🇺 TGA Regulatory Framework:**
+    - Listed or registered medicines
+    - Risk-based pre-market assessment
+    - Registered on ARTG
     """)
 
-# Country flag visualization (using emoji as fallback)
-country_flags = {
-    "USA": "🇺🇸",
-    "Australia": "🇦🇺"
-}
-st.markdown(f"**Country Flag:** {country_flags.get(country, '')}")
+st.markdown(f"**Country Flag:** {'🇺🇸' if country == 'USA' else '🇦🇺'}")
 
-# Overview
-st.markdown(f"### Banned/Restricted Herbs in {country}")
-st.dataframe(filtered_df[["Herbal Ingredient", "Botanical Name", "Status", "Risk"]], 
-            use_container_width=True)
+# =====================
+# BANNED HERBS TABLE
+# =====================
+st.markdown("### 🌱 Banned/Restricted Herbs")
+st.dataframe(filtered_df[["Herbal Ingredient", "Botanical Name", "Status", "Risk"]],
+             use_container_width=True)
 
-# Case reports with enhanced display
+# =====================
+# CASE REPORTS SECTION
+# =====================
 st.markdown("### 📄 Case Reports & Regulatory Actions")
+
+def extract_incident_count(text):
+    text = str(text)
+    numbers = re.findall(r'\d+', text)
+    numbers = [int(n) for n in numbers if not (1900 <= int(n) <= 2100)]
+    return max(numbers) if numbers else 1
+
 for _, row in filtered_df.iterrows():
     with st.expander(f"{row['Herbal Ingredient']} ({row['Botanical Name']})"):
         st.write(f"**Status:** {row['Status']} | **Risk:** {row['Risk']}")
-        
-        # Parse case reports to extract number of incidents
         case_text = str(row['Case Reports / Incidents'])
-        if "+" in case_text or "cases" in case_text.lower():
-            # Extract numbers from text like "140+ adverse events" or "6+ liver injury cases"
-            numbers = re.findall(r'\d+', case_text)
-            # Exclude numbers that are likely years (1900-2100)
-            numbers = [int(num) for num in numbers if not (1900 <= int(num) <= 2100)]
-            incident_count = max(numbers) if numbers else 1
-        else:
-            incident_count = 1
-            
+        incident_count = extract_incident_count(case_text)
         st.write(f"**Reported Incidents:** {incident_count}")
-        st.write(f"**Case Details:** {case_text}")
+        st.write(f"**Details:** {case_text}")
         st.markdown(f"[Regulatory Source]({row['Source']})")
 
-# Enhanced Risk Distribution Chart
+# =====================
+# RISK PROFILE CHART
+# =====================
 st.markdown("### 📊 Risk Profile Analysis")
 risk_df = filtered_df.copy()
+risk_df["Incident Count"] = risk_df["Case Reports / Incidents"].apply(extract_incident_count)
 
-# Extract numerical values from case reports with year exclusion
-def extract_incidents(text):
-    text = str(text)
-    if "+" in text or "cases" in text.lower():
-        numbers = re.findall(r'\d+', text)
-        # Exclude numbers that are likely years (1900-2100)
-        numbers = [int(num) for num in numbers if not (1900 <= int(num) <= 2100)]
-        return max(numbers) if numbers else 1
-    return 1
-
-risk_df['Incident Count'] = risk_df['Case Reports / Incidents'].apply(extract_incidents)
-
-# Group by risk category and sum incidents
 risk_analysis = risk_df.groupby('Risk')['Incident Count'].sum().reset_index()
 risk_analysis.columns = ['Risk Category', 'Total Reported Incidents']
 
 fig_risk = px.bar(risk_analysis, 
-                 x='Risk Category', 
-                 y='Total Reported Incidents',
-                 color='Risk Category',
-                 title=f'Total Reported Incidents by Risk Category in {country}',
-                 labels={'Total Reported Incidents': 'Number of Incidents'})
+                  x='Risk Category', y='Total Reported Incidents',
+                  color='Risk Category',
+                  title=f"Incidents by Risk in {country}")
 st.plotly_chart(fig_risk, use_container_width=True)
 
-# Enforcement Frequency Chart (now shows actual incident counts)
+# =====================
+# ENFORCEMENT HISTORY
+# =====================
 st.markdown("### 📈 Ingredient Enforcement History")
 ingredient_counts = risk_df.groupby('Herbal Ingredient')['Incident Count'].sum().reset_index()
 ingredient_counts.columns = ['Herbal Ingredient', 'Reported Incidents']
 
 fig_freq = px.bar(ingredient_counts, 
-                 x='Herbal Ingredient', 
-                 y='Reported Incidents',
-                 title=f'Reported Incidents by Ingredient in {country}',
-                 color='Reported Incidents')
+                  x='Herbal Ingredient', y='Reported Incidents',
+                  title=f"Incidents per Ingredient in {country}",
+                  color='Reported Incidents')
 st.plotly_chart(fig_freq, use_container_width=True)
 
-# Additional Regulatory Context
+# =====================
+# REGULATORY INSIGHTS
+# =====================
 st.markdown("### ℹ️ Regulatory Insights")
 if country == "USA":
     st.markdown("""
-    - The FDA maintains an Import Alert system for problematic herbal ingredients
-    - From 2023-2024, herbal supplement imports to the US showed a -33% growth rate
-    - Recent lawsuits target kratom manufacturers for adverse health effects
+    - FDA Import Alerts target banned ingredients
+    - 2023–24: -33% growth in herbal supplement imports
+    - Recent lawsuits on kratom health risks
     """)
 elif country == "Australia":
     st.markdown("""
-    - TGA maintains a Schedule of banned substances in therapeutic goods
-    - Australia has seen increasing seizures of prohibited herbal products like black salve
+    - TGA bans black salve, yohimbe and more
+    - Sharp increase in seizures of unlisted herbal imports
     """)
 
-# Data source attribution
-st.caption("Data sources: FDA Adverse Event Reporting System, TGA regulatory actions, and clinical case reports")
+st.caption("Sources: FDA, TGA, Clinical case reports, WHO Herbal Regulation Database")
+
+# =====================
+# 🤖 GEMINI AI CHATBOT
+# =====================
+st.markdown("---")
+st.markdown("### 🤖 Ask the Herbal Regulation AI Assistant")
+
+if user_input := st.chat_input("Ask a question about regulations, ingredients, or risks..."):
+    st.chat_message("user").write(user_input)
+
+    with st.chat_message("assistant"):
+        with st.spinner("Gemini is thinking..."):
+            try:
+                gemini_response = gemini_model.generate_content(f"""
+                You are an expert assistant on banned herbal ingredients and global regulatory frameworks.
+                Based on the following user query, give clear and concise information: "{user_input}"
+                """)
+                st.write(gemini_response.text)
+            except Exception as e:
+                st.error("Gemini failed. Please check your API key or connection.")
