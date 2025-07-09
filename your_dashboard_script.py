@@ -365,6 +365,12 @@ fig_freq = px.bar(ingredient_counts,
 st.plotly_chart(fig_freq, use_container_width=True)
 
 
+
+
+
+
+
+
 st.caption("Sources: FDA, TGA, Clinical case reports, WHO Herbal Regulation Database")
 
 # =====================
