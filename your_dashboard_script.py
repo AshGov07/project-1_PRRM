@@ -392,7 +392,7 @@ if user_input := st.chat_input("Ask a question about regulations, ingredients, o
     st.chat_message("user").write(user_input)
 
     with st.chat_message("assistant"):
-        with st.spinner("Gemini is thinking..."):
+        with st.spinner("Searching"):
             try:
                 gemini_response = gemini_model.generate_content(f"""
                 You are an expert assistant on banned herbal ingredients and global regulatory frameworks.
