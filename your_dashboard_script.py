@@ -313,7 +313,7 @@ st.markdown(f"**Country Flag:** {'🇺🇸' if country == 'USA' else '🇦🇺'}
 # =====================
 st.markdown("### 🌱 Banned/Restricted Herbs")
 st.dataframe(filtered_df[["Herbal Ingredient", "Botanical Name", "Status", "Risk"]],
-             use_container_width=True)
+             use_container_width=True,hide_index=True)
 
 # =====================
 # CASE REPORTS SECTION
