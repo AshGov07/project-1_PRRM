@@ -270,7 +270,7 @@ st.set_page_config(page_title="Banned Herbal Ingredients", layout="wide")
 # GEMINI SETUP
 # =====================
 genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-gemini_model = genai.GenerativeModel("gemini-pro")
+gemini_model = genai.GenerativeModel("gemini-2.5-flash")
 
 # =====================
 # LOAD DATA
