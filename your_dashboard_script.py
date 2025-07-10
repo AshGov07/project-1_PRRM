@@ -404,16 +404,16 @@ if submitted and user_input:
     st.sidebar.markdown("**You asked:**")
     st.sidebar.write(user_input)
 
-    with st.sidebar.spinner("Gemini is thinking..."):
+    with st.spinner("Assistant is thinking..."):
         try:
             gemini_response = gemini_model.generate_content(f"""
             You are an expert assistant on banned herbal ingredients and global regulatory frameworks.
             Based on the following user query, give clear and concise information: "{user_input}"
             """)
-            st.sidebar.markdown("🧠 **Gemini says:**")
+            st.sidebar.markdown("🧠 **Assistant says:**")
             st.sidebar.write(gemini_response.text)
         except Exception as e:
-            st.sidebar.error("⚠️ Gemini failed. Check your API key or internet.")
+            st.sidebar.error("⚠️ Assistant failed. Check your API key or internet.")
 
 # =====================
 # HEADER
