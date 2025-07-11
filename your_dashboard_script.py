@@ -328,9 +328,60 @@ st.plotly_chart(fig_combined, use_container_width=True)
 
 st.caption("Sources: FDA, TGA, Clinical case reports, WHO Herbal Regulation Database")
 
+# # =====================
+# # 🤖 GEMINI AI CHATBOT
+# # =====================
+# st.markdown("---")
+# st.markdown("### 🤖 Ask the Herbal Regulation AI Assistant")
+
+# if user_input := st.chat_input("Ask a question about regulations, ingredients, or risks..."):
+#     st.chat_message("user").write(user_input)
+
+#     with st.chat_message("assistant"):
+#         with st.spinner("thinking..."):
+#             try:
+#                 gemini_response = gemini_model.generate_content(f"""
+#                 You are an expert assistant on banned herbal ingredients and global regulatory frameworks.
+#                 Based on the following user query, give clear and concise information: "{user_input}"
+#                 """)
+#                 st.write(gemini_response.text)
+#             except Exception as e:
+#                 st.error("Gemini failed. Please check your API key or connection.")
+#             try:
+#                 gemini_response = gemini_model.generate_content(f"""
+#                 You are an expert assistant on banned herbal ingredients and global regulatory frameworks.
+#                 Based on the following user query, give clear and concise information: "{user_input}"
+#                 """)
+#                 st.write(gemini_response.text)
+#             except Exception as e:
+#                 st.error("Gemini failed. Please check your API key or connection.")
+
 # =====================
-# 🤖 GEMINI AI CHATBOT
+# 🤖 GEMINI AI CHATBOT (With RAG)
 # =====================
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
+
+# Combine relevant info per herb into a context blob
+df['context_blob'] = df.apply(lambda row: f"""
+Country: {row['Country']}
+Herbal Ingredient: {row['Herbal Ingredient']}
+Botanical Name: {row['Botanical Name']}
+Status: {row['Status']}
+Risk: {row['Risk']}
+Case Reports / Incidents: {row['Case Reports / Incidents']}
+Source: {row['Source']}
+""", axis=1)
+
+# RAG retrieval function
+def retrieve_context(query, top_k=3):
+    documents = df['context_blob'].tolist()
+    vectorizer = TfidfVectorizer().fit_transform([query] + documents)
+    similarities = cosine_similarity(vectorizer[0:1], vectorizer[1:]).flatten()
+    top_indices = similarities.argsort()[-top_k:][::-1]
+    return "\n\n---\n\n".join(df.iloc[i]['context_blob'] for i in top_indices)
+
+# Chat UI
 st.markdown("---")
 st.markdown("### 🤖 Ask the Herbal Regulation AI Assistant")
 
@@ -338,21 +389,31 @@ if user_input := st.chat_input("Ask a question about regulations, ingredients, o
     st.chat_message("user").write(user_input)
 
     with st.chat_message("assistant"):
-        with st.spinner("thinking..."):
+        with st.spinner("Retrieving relevant regulatory info..."):
             try:
-                gemini_response = gemini_model.generate_content(f"""
-                You are an expert assistant on banned herbal ingredients and global regulatory frameworks.
-                Based on the following user query, give clear and concise information: "{user_input}"
-                """)
-                st.write(gemini_response.text)
+                # Step 1: Retrieve grounded context
+                context = retrieve_context(user_input)
+
+                # Step 2: If nothing found, fallback
+                if not context.strip():
+                    st.write("Sorry, I couldn't find relevant information in the current dataset.")
+                else:
+                    # Step 3: Ask Gemini using grounded prompt
+                    prompt = f"""
+You are a regulatory expert assistant focused on banned herbal ingredients and country-specific safety reports.
+
+Use only the following context to answer the user's query.
+If the answer cannot be found in the context, reply: "I don't have sufficient data to answer that."
+
+Context:
+{context}
+
+User question: {user_input}
+Answer:
+                    """
+                    response = gemini_model.generate_content(prompt)
+                    st.write(response.text)
             except Exception as e:
                 st.error("Gemini failed. Please check your API key or connection.")
-            try:
-                gemini_response = gemini_model.generate_content(f"""
-                You are an expert assistant on banned herbal ingredients and global regulatory frameworks.
-                Based on the following user query, give clear and concise information: "{user_input}"
-                """)
-                st.write(gemini_response.text)
-            except Exception as e:
-                st.error("Gemini failed. Please check your API key or connection.")
+
 
